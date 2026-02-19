@@ -1,0 +1,19 @@
+{
+  "name": "fliplet-ai-chatbot",
+  "version": "1.0.0",
+  "description": "AI chatbot that interacts with the Fliplet REST API via Claude tool calling",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "chat": "node src/cli.js",
+    "chat:direct": "node src/cli.js --direct"
+  },
+  "keywords": ["fliplet", "ai", "chatbot", "claude", "tool-calling"],
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}
