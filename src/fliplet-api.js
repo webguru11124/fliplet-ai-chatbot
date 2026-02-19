@@ -13,14 +13,14 @@ class FlipletAPI {
   }
 
   async get(path) {
-    let lastErr;
+    let lastErr = new Error(`Failed after ${MAX_RETRIES} attempts: ${path}`);
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
         const res = await fetch(`${BASE}${path}`, {
           headers: { 'Auth-token': this.token },
         });
         if (res.status === 429) {
-          // rate-limited — back off and retry
+          lastErr = new Error(`429 Rate Limited on ${path}`);
           await sleep(RETRY_BASE_MS * 2 ** attempt);
           continue;
         }

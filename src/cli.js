@@ -63,38 +63,60 @@ async function chatViaServer(message) {
   }
 
   stopSpinner();
-  process.stdout.write(`\n${c.green('Assistant')}: `);
 
-  const text = await res.text();
+  let headerPrinted = false;
   let fullReply = '';
+  let currentEvent = '';
 
-  // Parse SSE events from the response body
-  for (const line of text.split('\n')) {
-    if (line.startsWith('event: ')) {
-      // next line is data
-    } else if (line.startsWith('data: ')) {
-      const json = JSON.parse(line.slice(6));
-      if (line.includes('"text"') && json.text) {
-        process.stdout.write(json.text);
-        fullReply += json.text;
-      }
-      if (json.name) {
-        // tool call event
-        process.stdout.write(`\n  ${c.dim('↪')} ${c.yellow(json.name)}`);
-        startSpinner('Fetching data');
-      }
-      if (json.reply !== undefined) {
-        // done event — update history
-        history = json.history || [];
-        if (!fullReply) process.stdout.write(json.reply);
-      }
-      if (json.message && !json.reply && !json.text) {
-        // error event
-        process.stdout.write(c.red(json.message));
+  // Read the SSE stream incrementally so tokens appear in real-time.
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    // Process complete lines from the buffer
+    let newlineIdx;
+    while ((newlineIdx = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, newlineIdx).trimEnd();
+      buffer = buffer.slice(newlineIdx + 1);
+
+      if (line.startsWith('event: ')) {
+        currentEvent = line.slice(7);
+      } else if (line.startsWith('data: ')) {
+        let json;
+        try { json = JSON.parse(line.slice(6)); } catch { continue; }
+
+        if (currentEvent === 'delta' && json.text) {
+          if (!headerPrinted) {
+            process.stdout.write(`\n${c.green('Assistant')}: `);
+            headerPrinted = true;
+          }
+          process.stdout.write(json.text);
+          fullReply += json.text;
+        } else if (currentEvent === 'tool' && json.name) {
+          stopSpinner();
+          process.stdout.write(`\n  ${c.dim('↪')} ${c.yellow(json.name)}`);
+          startSpinner('Fetching data');
+        } else if (currentEvent === 'done') {
+          history = json.history || [];
+          if (!fullReply && json.reply) {
+            if (!headerPrinted) process.stdout.write(`\n${c.green('Assistant')}: `);
+            process.stdout.write(json.reply);
+          }
+        } else if (currentEvent === 'error') {
+          stopSpinner();
+          process.stdout.write(`\n${c.red('Error')}: ${json.message}`);
+        }
+        currentEvent = '';
       }
     }
   }
 
+  stopSpinner();
   process.stdout.write('\n\n');
 }
 
